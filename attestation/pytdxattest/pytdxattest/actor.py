@@ -184,7 +184,7 @@ class CCEventLogActor(ABC):
         generate IMR values for verification
         """
         self._fetch_boot_time_event_logs()
-        self._fetch_run_time_event_logs()
+        self._fetch_runtime_event_logs()
         
         boot_time_event_logs_by_index = {}
         for index in range(RTMR.RTMR_COUNT):
