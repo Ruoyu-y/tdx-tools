@@ -135,7 +135,7 @@ class CCEventLogActor(ABC):
     
     def _fetch_boot_time_event_logs(self):
         # Fetch cvm boot time event log using CCNP API
-        self._boot_time_event_logs = Eventlog.Get_platform_eventlog()
+        self._boot_time_event_logs = Eventlog.get_platform_eventlog()
 
     def _fetch_runtime_event_logs(self):
         # Fetch cvm runtime event log from IMA
