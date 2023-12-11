@@ -2,6 +2,7 @@
 Actors package, the bussiness logic layer.
 """
 
+import base64
 import os
 import logging
 from typing import Dict, List
@@ -12,6 +13,10 @@ from .tdreport import TdReport
 from .tdeventlog import TDEventLogEntry, TDEventLogType, TDEventLogSpecIdHeader
 from .ccel import CCEL
 from .binaryblob import BinaryBlob
+
+from ccnp import Measurement
+from ccnp import MeasurementType
+from ccnp import Eventlog
 
 __author__ = "cpio"
 
@@ -34,7 +39,7 @@ class VerifyActor:
 
     def verify_rtmr(self) -> None:
         """
-        Get TD report and RTMR replayed by event log to do verification.
+        Fetch RTMR measurement and event logs using CCNP API and replay event log to do verification.
         """
         # 1. Read CCEL from ACPI table at /sys/firmware/acpi/tables/CCEL
         ccelobj = CCEL.create_from_acpi_file()
@@ -51,28 +56,32 @@ class VerifyActor:
 
         # 4. Read TD REPORT via TDCALL.GET_TDREPORT
         td_report = TdReport.get_td_report()
+        rtmr_0 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 0)
+        rtmr_1 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 1)
+        rtmr_2 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 2)
+        rtmr_3 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 3)
 
         # 5. Verify individual RTMR value from TDREPORT and recalculated from
         #    event log
         self._verify_single_rtmr(
             0,
             td_event_log_actor.get_rtmr_by_index(0),
-            RTMR(bytearray(td_report.td_info.rtmr_0)))
+            RTMR(bytearray(base64.b64decode(rtmr_0))))
 
         self._verify_single_rtmr(
             1,
             td_event_log_actor.get_rtmr_by_index(1),
-            RTMR(bytearray(td_report.td_info.rtmr_1)))
+            RTMR(bytearray(base64.b64decode(rtmr_1))))
 
         self._verify_single_rtmr(
             2,
             td_event_log_actor.get_rtmr_by_index(2),
-            RTMR(bytearray(td_report.td_info.rtmr_2)))
+            RTMR(bytearray(base64.b64decode(rtmr_2))))
 
         self._verify_single_rtmr(
             3,
             td_event_log_actor.get_rtmr_by_index(3),
-            RTMR(bytearray(td_report.td_info.rtmr_3)))
+            RTMR(bytearray(base64.b64decode(rtmr_3))))
 
 
 # pylint: disable=too-few-public-methods
@@ -176,6 +185,20 @@ class TDEventLogActor:
         for rtmr_index, event_logs in event_logs_by_index.items():
             rtmr_value = TDEventLogActor._replay_single_rtmr(event_logs)
             rtmr_by_index[rtmr_index] = rtmr_value
+
+        # append the IMA logs for RTMR[2]
+        with open('/sys/kernel/security/integrity/ima/ascii_runtime_measurements') as f:
+          val = rtmr_by_index[2].data.hex()
+          for line in f:
+            elements = line.split(" ")
+            extend_str = val + elements[2]
+            sha384_algo = sha384()
+            sha384_algo.update(bytes.fromhex(extend_str))
+            val = sha384_algo.hexdigest()
+        rtmr2 = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
+        rtmr2 = sha384_algo.digest()
+
+        rtmr_by_index[2] = RTMR(rtmr2)
 
         self._rtmrs = rtmr_by_index
 
