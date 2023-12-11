@@ -41,12 +41,6 @@ class VerifyActor:
         """
         Fetch RTMR measurement and event logs using CCNP API and replay event log to do verification.
         """
-        '''
-        # 1. Read CCEL from ACPI table at /sys/firmware/acpi/tables/CCEL
-        ccelobj = CCEL.create_from_acpi_file()
-        if ccelobj is None:
-            return
-        '''
 
         # 1. Check if CCEL ACPI table exist at /sys/firmware/acpi/tables/CCEL
         ccel_file = "/sys/firmware/acpi/tables/data/CCEL"
@@ -71,22 +65,22 @@ class VerifyActor:
         # 6. Verify individual IMR value from CCNP fetching and recalculated from event log
         self._verify_single_rtmr(
             0,
-            td_event_log_actor.get_rtmr_by_index(0),
+            cc_event_log_actor.get_rtmr_by_index(0),
             RTMR(bytearray(base64.b64decode(rtmr_0))))
 
         self._verify_single_rtmr(
             1,
-            td_event_log_actor.get_rtmr_by_index(1),
+            cc_event_log_actor.get_rtmr_by_index(1),
             RTMR(bytearray(base64.b64decode(rtmr_1))))
 
         self._verify_single_rtmr(
             2,
-            td_event_log_actor.get_rtmr_by_index(2),
+            cc_event_log_actor.get_rtmr_by_index(2),
             RTMR(bytearray(base64.b64decode(rtmr_2))))
 
         self._verify_single_rtmr(
             3,
-            td_event_log_actor.get_rtmr_by_index(3),
+            cc_event_log_actor.get_rtmr_by_index(3),
             RTMR(bytearray(base64.b64decode(rtmr_3))))
 
         # 7. Verify selected digest according to file input
@@ -136,7 +130,6 @@ class CCEventLogActor(ABC):
     def __init__(self):
         self._boot_time_event_logs = []
         self._run_time_event_logs = []
-        self._event_logs:list[CcEventLogEntry] = []
         self._imrs:list[RTMR] = {}
     
     def _fetch_boot_time_event_logs():
@@ -150,22 +143,48 @@ class CCEventLogActor(ABC):
                 self._run_time_event_logs.append(line)
 
     @staticmethod
-    def _replay_single_rtmr(event_logs: List[TDEventLogEntry]) -> RTMR:
-        rtmr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
+    def _replay_single_boot_time_imr(event_logs: List[TDEventLogEntry]) -> RTMR:
+        imr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
 
         for event_log in event_logs:
-            digest = event_log.digests[0]
+            digest = event_log.digest
             sha384_algo = sha384()
-            sha384_algo.update(rtmr + digest)
-            rtmr = sha384_algo.digest()
+            sha384_algo.update(imr + digest)
+            imr = sha384_algo.digest()
 
-        return RTMR(rtmr)
+        return RTMR(imr)
+
+    @staticmethod
+    def _replay_runtime_imr(event_logs, base: RTMR) -> RTMR:
+        """
+        Replay runtime measurements based on the boot time IMR
+        """
+        imr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
+
+        for event_log in event_logs:
+            elements = event_log.split(" ")
+            extend_val = base + elements[2]
+            sha384_algo = sha384()
+            sha384_algo.update(bytes.fromhex(extend_val))
+            val = sha384_algo.hexdigest()
+
+        imr = sha384_algo.digest()
+        return RTMR(imr)
+        
+    def get_rtmr_by_index(self, index: int) -> RTMR:
+        """
+        Get RTMR by TD register index
+        """
+        return self._imrs[index]
 
     def replay(self) -> Dict[int, RTMR]:
         """
         Replay event logs including boot time event logs and runtime event logs to
         generate IMR values for verification
         """
+        self._fetch_boot_time_event_logs()
+        self._fetch_run_time_event_logs()
+        
         boot_time_event_logs_by_index = {}
         for index in range(RTMR.RTMR_COUNT):
             boot_time_event_logs_by_index[index] = []
@@ -173,18 +192,21 @@ class CCEventLogActor(ABC):
         for event_log in self._boot_time_event_logs:
             boot_time_event_logs_by_index[event_log.reg_idx].append(event_log)
 
+        # replay boot time event logs and save replay results to dict
         imr_by_index = {}
         for imr_index, event_logs in boot_time_event_logs_by_index.items():
-            imr_value = CCEventLogActor._replay_single_rtmr(event_logs)
+            imr_value = CCEventLogActor._replay_single_boot_time_rtmr(event_logs)
             imr_by_index[imr_index] = imr_value
 
-        for event_log 
-            
+        # runtime measurements are now extended into RTMR[2], replay the runtime event logs into RTMR[2]
+        concat_imr_value = CCEventLogActor._replay_runtime_imr(self._run_time_event_logs, imr_by_index[2])
+        imr_by_index[2] = concat_imr_value
+
+        self._imrs = imr_by_index
+
+    def replay_selected_runtime_measurement() -> str:
+        return "Not Implemented"
         
-        
-        
-                
-class TDEventLogActor 
 
 # pylint: disable=too-few-public-methods
 '''
