@@ -133,11 +133,11 @@ class CCEventLogActor(ABC):
         self._run_time_event_logs = []
         self._imrs:list[RTMR] = {}
     
-    def _fetch_boot_time_event_logs():
+    def _fetch_boot_time_event_logs(self):
         # Fetch cvm boot time event log using CCNP API
         self._boot_time_event_logs = Eventlog.Get_platform_eventlog()
 
-    def _fetch_runtime_event_logs():
+    def _fetch_runtime_event_logs(self):
         # Fetch cvm runtime event log from IMA
         with open('/sys/kernel/security/integrity/ima/ascii_runtime_measurements') as f:
             for line in f:
