@@ -41,11 +41,58 @@ class VerifyActor:
         """
         Fetch RTMR measurement and event logs using CCNP API and replay event log to do verification.
         """
+        '''
         # 1. Read CCEL from ACPI table at /sys/firmware/acpi/tables/CCEL
         ccelobj = CCEL.create_from_acpi_file()
         if ccelobj is None:
             return
+        '''
 
+        # 1. Check if CCEL ACPI table exist at /sys/firmware/acpi/tables/CCEL
+        ccel_file = "/sys/firmware/acpi/tables/data/CCEL"
+        assert os.path.exists(ccel_file), f"Could not find the CCEL file {ccel_file}"
+
+        # 2. Check if IMA measurement event log exist at /sys/kernel/security/integrity/ima/ascii_runtime_measurements
+        ima_measurement_file = "/sys/kernel/security/integrity/ima/ascii_runtime_measurements"
+        assert os.path.exists(ima_measurement_file), f"Could not find the IMA measurement file {ima_measurement_file}"
+
+        # 3. Init CCEventlogActor
+        cc_event_log_actor = CCEventLogActor()
+
+        # 4. Collect event log and replay the IMR value according to event log
+        cc_event_log_actor.replay()
+
+        # 5. Collect IMR measurements using CCNP
+        rtmr_0 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 0)
+        rtmr_1 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 1)
+        rtmr_2 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 2)
+        rtmr_3 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 3)
+
+        # 6. Verify individual IMR value from CCNP fetching and recalculated from event log
+        self._verify_single_rtmr(
+            0,
+            td_event_log_actor.get_rtmr_by_index(0),
+            RTMR(bytearray(base64.b64decode(rtmr_0))))
+
+        self._verify_single_rtmr(
+            1,
+            td_event_log_actor.get_rtmr_by_index(1),
+            RTMR(bytearray(base64.b64decode(rtmr_1))))
+
+        self._verify_single_rtmr(
+            2,
+            td_event_log_actor.get_rtmr_by_index(2),
+            RTMR(bytearray(base64.b64decode(rtmr_2))))
+
+        self._verify_single_rtmr(
+            3,
+            td_event_log_actor.get_rtmr_by_index(3),
+            RTMR(bytearray(base64.b64decode(rtmr_3))))
+
+        # 7. Verify selected digest according to file input
+        # get input
+        cc_event_log_actor.replay_selected_runtime_measurement()
+'''
         # 2. Get the start address and length for event log area
         td_event_log_actor = TDEventLogActor(
             ccelobj.log_area_start_address,
@@ -53,13 +100,10 @@ class VerifyActor:
 
         # 3. Collect event log and replay the RTMR value according to event log
         td_event_log_actor.replay()
-
+        
         # 4. Read TD REPORT via TDCALL.GET_TDREPORT
-        td_report = TdReport.get_td_report()
-        rtmr_0 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 0)
-        rtmr_1 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 1)
-        rtmr_2 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 2)
-        rtmr_3 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 3)
+        #td_report = TdReport.get_td_report()
+        
 
         # 5. Verify individual RTMR value from TDREPORT and recalculated from
         #    event log
@@ -82,9 +126,18 @@ class VerifyActor:
             3,
             td_event_log_actor.get_rtmr_by_index(3),
             RTMR(bytearray(base64.b64decode(rtmr_3))))
+        '''
 
+class CCEventlogActor:
+    """
+    Event log actor
+    """
+
+    def __init__(self):
+        self._data
 
 # pylint: disable=too-few-public-methods
+'''
 class TDEventLogActor:
     """
     Event log actor
@@ -233,3 +286,4 @@ class TDEventLogActor:
             LOG.info("==== RTMR[%d] ====", rtmr_index)
             rtmr.dump()
             LOG.info("")
+    '''
