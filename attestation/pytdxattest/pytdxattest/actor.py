@@ -210,7 +210,6 @@ class CCEventLogActor(ABC):
         
 
 # pylint: disable=too-few-public-methods
-'''
 class TDEventLogActor:
     """
     Event log actor
@@ -359,4 +358,4 @@ class TDEventLogActor:
             LOG.info("==== RTMR[%d] ====", rtmr_index)
             rtmr.dump()
             LOG.info("")
-    '''
+    
