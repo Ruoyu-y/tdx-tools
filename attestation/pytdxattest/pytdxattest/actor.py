@@ -5,6 +5,7 @@ Actors package, the bussiness logic layer.
 import base64
 import os
 import logging
+from abc import ABC, abstractmethod
 from typing import Dict, List
 from hashlib import sha384
 
