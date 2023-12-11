@@ -128,13 +128,63 @@ class VerifyActor:
             RTMR(bytearray(base64.b64decode(rtmr_3))))
         '''
 
-class CCEventlogActor:
+class CCEventLogActor(ABC):
     """
     Event log actor
     """
 
     def __init__(self):
-        self._data
+        self._boot_time_event_logs = []
+        self._run_time_event_logs = []
+        self._event_logs:list[CcEventLogEntry] = []
+        self._imrs:list[RTMR] = {}
+    
+    def _fetch_boot_time_event_logs():
+        # Fetch cvm boot time event log using CCNP API
+        self._boot_time_event_logs = Eventlog.Get_platform_eventlog()
+
+    def _fetch_runtime_event_logs():
+        # Fetch cvm runtime event log from IMA
+        with open('/sys/kernel/security/integrity/ima/ascii_runtime_measurements') as f:
+            for line in f:
+                self._run_time_event_logs.append(line)
+
+    @staticmethod
+    def _replay_single_rtmr(event_logs: List[TDEventLogEntry]) -> RTMR:
+        rtmr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
+
+        for event_log in event_logs:
+            digest = event_log.digests[0]
+            sha384_algo = sha384()
+            sha384_algo.update(rtmr + digest)
+            rtmr = sha384_algo.digest()
+
+        return RTMR(rtmr)
+
+    def replay(self) -> Dict[int, RTMR]:
+        """
+        Replay event logs including boot time event logs and runtime event logs to
+        generate IMR values for verification
+        """
+        boot_time_event_logs_by_index = {}
+        for index in range(RTMR.RTMR_COUNT):
+            boot_time_event_logs_by_index[index] = []
+
+        for event_log in self._boot_time_event_logs:
+            boot_time_event_logs_by_index[event_log.reg_idx].append(event_log)
+
+        imr_by_index = {}
+        for imr_index, event_logs in boot_time_event_logs_by_index.items():
+            imr_value = CCEventLogActor._replay_single_rtmr(event_logs)
+            imr_by_index[imr_index] = imr_value
+
+        for event_log 
+            
+        
+        
+        
+                
+class TDEventLogActor 
 
 # pylint: disable=too-few-public-methods
 '''
