@@ -196,7 +196,7 @@ class CCEventLogActor(ABC):
         # replay boot time event logs and save replay results to dict
         imr_by_index = {}
         for imr_index, event_logs in boot_time_event_logs_by_index.items():
-            imr_value = CCEventLogActor._replay_single_boot_time_rtmr(event_logs)
+            imr_value = CCEventLogActor._replay_single_boot_time_imr(event_logs)
             imr_by_index[imr_index] = imr_value
 
         # runtime measurements are now extended into RTMR[2], replay the runtime event logs into RTMR[2]
