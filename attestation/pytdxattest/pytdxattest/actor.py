@@ -43,27 +43,33 @@ class VerifyActor:
         Fetch RTMR measurement and event logs using CCNP API and replay event log to do verification.
         """
 
-        # 1. Check if CCEL ACPI table exist at /sys/firmware/acpi/tables/CCEL
-        ccel_file = "/sys/firmware/acpi/tables/data/CCEL"
-        assert os.path.exists(ccel_file), f"Could not find the CCEL file {ccel_file}"
-
-        # 2. Check if IMA measurement event log exist at /sys/kernel/security/integrity/ima/ascii_runtime_measurements
+        # 1. Check if IMA measurement event log exist at /sys/kernel/security/integrity/ima/ascii_runtime_measurements
+        LOG.info("Step 1: Check if IMA event logs exist in the system.")
         ima_measurement_file = "/sys/kernel/security/integrity/ima/ascii_runtime_measurements"
         assert os.path.exists(ima_measurement_file), f"Could not find the IMA measurement file {ima_measurement_file}"
 
-        # 3. Init CCEventlogActor
+        # 2. Init CCEventlogActor and collect event log and replay the IMR value according to event log
+        LOG.info("Step 2: Collect boot time and runtime event logs and replay results.")
         cc_event_log_actor = CCEventLogActor()
-
-        # 4. Collect event log and replay the IMR value according to event log
         cc_event_log_actor.replay()
 
-        # 5. Collect IMR measurements using CCNP
+        # 3. Collect IMR measurements using CCNP
+        LOG.info("Step 3: Fetching measurements in IMR.")
+        LOG.info("==> Fetching measurements in RTMR[0]")
         rtmr_0 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 0)
+        LOG.info("RTMR[0]: %s\n", base64.b64decode(rtmr_0).hex())
+        LOG.info("==> Fetching measurements in RTMR[1]")
         rtmr_1 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 1)
+        LOG.info("RTMR[1]: %s\n", base64.b64decode(rtmr_1).hex())
+        LOG.info("==> Fetching measurements in RTMR[2]")
         rtmr_2 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 2)
+        LOG.info("RTMR[2]: %s\n", base64.b64decode(rtmr_2).hex())
+        LOG.info("==> Fetching measurements in RTMR[3]")
         rtmr_3 = Measurement.get_platform_measurement(MeasurementType.TYPE_TDX_RTMR, None, 3)
+        LOG.info("RTMR[3]: %s\n", base64.b64decode(rtmr_3).hex())
 
-        # 6. Verify individual IMR value from CCNP fetching and recalculated from event log
+        # 4. Verify individual IMR value from CCNP fetching and recalculated from event log
+        LOG.info("Step 4: Verify individual IMR value and re-calculated value from event logs")
         self._verify_single_rtmr(
             0,
             cc_event_log_actor.get_rtmr_by_index(0),
@@ -134,23 +140,34 @@ class CCEventLogActor(ABC):
         self._imrs:list[RTMR] = {}
     
     def _fetch_boot_time_event_logs(self):
-        # Fetch cvm boot time event log using CCNP API
+        """
+        Fetch cvm boot time event log using CCNP API
+        """
+        LOG.info("==> Fetching boot time event logs using CCNP API")
         self._boot_time_event_logs = Eventlog.get_platform_eventlog()
+        LOG.info("Total %d boot time event logs fetched.\n", len(self._boot_time_event_logs))
 
     def _fetch_runtime_event_logs(self):
-        # Fetch cvm runtime event log from IMA
+        """
+        Fetch cvm runtime event log from IMA
+        """
+        LOG.info("==> Fetching runtime event logs from IMA")
         with open('/sys/kernel/security/integrity/ima/ascii_runtime_measurements') as f:
+            num = 0
             for line in f:
                 self._run_time_event_logs.append(line)
+                num = num + 1
+        LOG.info("Total %d IMA event logs fetched.\n", num)
 
     @staticmethod
     def _replay_single_boot_time_imr(event_logs: List[TDEventLogEntry]) -> RTMR:
         imr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
 
         for event_log in event_logs:
-            digest = event_log.digest
+            digest = list(map(int, event_log.digest.strip('[]').split(' ')))
+            digest_hex = ''.join('{:02x}'.format(i) for i in digest)
             sha384_algo = sha384()
-            sha384_algo.update(imr + digest)
+            sha384_algo.update(bytes.fromhex(imr.hex() + digest_hex))
             imr = sha384_algo.digest()
 
         return RTMR(imr)
@@ -162,9 +179,10 @@ class CCEventLogActor(ABC):
         """
         imr = bytearray(RTMR.RTMR_LENGTH_BY_BYTES)
 
+        val = base.data.hex()
         for event_log in event_logs:
             elements = event_log.split(" ")
-            extend_val = base + elements[2]
+            extend_val = val + elements[2]
             sha384_algo = sha384()
             sha384_algo.update(bytes.fromhex(extend_val))
             val = sha384_algo.hexdigest()
@@ -205,6 +223,7 @@ class CCEventLogActor(ABC):
 
         self._imrs = imr_by_index
 
+    @staticmethod
     def replay_selected_runtime_measurement() -> str:
         return "Not Implemented"
         
